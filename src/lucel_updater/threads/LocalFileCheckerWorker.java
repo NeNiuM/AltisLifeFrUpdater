@@ -44,7 +44,6 @@ public class LocalFileCheckerWorker extends LucelWorker{
 
     @Override
     protected void done() {
-        Logger.getLogger(this.getClass().getSimpleName()).info("done !");
     }
     
     

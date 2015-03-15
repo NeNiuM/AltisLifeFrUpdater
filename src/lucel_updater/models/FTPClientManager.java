@@ -12,8 +12,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
+import org.apache.commons.net.ftp.FTP;
 import org.apache.commons.net.ftp.FTPClient;
 
+import cz.dhl.ftp.Ftp;
+import cz.dhl.ftp.FtpConnect;
+import cz.dhl.ftp.FtpContext;
 import lucel_updater.Lucel_Updater;
 import lucel_updater.controllers.MainFrame;
 
@@ -23,7 +27,7 @@ import lucel_updater.controllers.MainFrame;
  */
 public class FTPClientManager {
 
-	private FTPClient ftpClient;
+	private Ftp ftpClient;
 
 	public FTPClientManager() {
 
@@ -42,7 +46,10 @@ public class FTPClientManager {
 			logger.info("Class: " + FTPClient.class.getSimpleName()
 					+ " loaded from " + loc);
 
-			this.ftpClient = new FTPClient();
+			//this.ftpClient = new FTPClient();
+			this.ftpClient = new Ftp();
+			ftpClient.getContext().setFileTransferMode('I');
+			
 			logger.info("OK FTP !");
 
 		} catch (Exception e) {
@@ -60,16 +67,13 @@ public class FTPClientManager {
 	public boolean connect() {
 		try {
 			// pass directory path on server to connect
-			this.getFtpClient().connect(
-					Lucel_Updater.getConfigValue("altisfr.ftp.host"));
-			this.getFtpClient().setDefaultPort(
-					Integer.valueOf(Lucel_Updater
-							.getConfigValue("altisfr.ftp.port")));
-			this.getFtpClient().enterRemotePassiveMode();
-			this.getFtpClient().setConnectTimeout(600000);
-			this.getFtpClient().setDefaultTimeout(600000);
-			this.getFtpClient().setSoTimeout(600000);
-			this.getFtpClient().setControlKeepAliveTimeout(300);
+			this.ftpClient.connect(Lucel_Updater.getConfigValue("altisfr.ftp.host"), Integer.valueOf(Lucel_Updater.getConfigValue("altisfr.ftp.port")));
+	
+//			this.getFtpClient().enterRemotePassiveMode();
+//			this.getFtpClient().setConnectTimeout(600000);
+//			this.getFtpClient().setDefaultTimeout(600000);
+//			this.getFtpClient().setSoTimeout(600000);
+//			this.getFtpClient().setControlKeepAliveTimeout(300);
 		} catch (Exception e) {
 			MainFrame
 					.getInstance()
@@ -98,18 +102,13 @@ public class FTPClientManager {
 	}
 
 	public void disconnect() {
-		try {
-			this.getFtpClient().disconnect();
-		} catch (IOException ex) {
-			Logger.getLogger(FTPClientManager.class.getName()).log(
-					Level.SEVERE, null, ex);
-		}
+		this.getFtpClient().disconnect();
 	}
 
 	/**
 	 * @return the ftpClient
 	 */
-	public FTPClient getFtpClient() {
+	public Ftp getFtpClient() {
 		return ftpClient;
 	}
 
@@ -117,7 +116,7 @@ public class FTPClientManager {
 	 * @param ftpClient
 	 *            the ftpClient to set
 	 */
-	public void setFtpClient(FTPClient ftpClient) {
+	public void setFtpClient(Ftp ftpClient) {
 		this.ftpClient = ftpClient;
 	}
 

@@ -18,9 +18,9 @@ import java.util.logging.Logger;
 
 import lucel_updater.Lucel_Updater;
 import lucel_updater.controllers.MainFrame;
-
-import org.apache.commons.net.ftp.FTPClient;
-import org.apache.commons.net.ftp.FTPFile;
+import cz.dhl.ftp.Ftp;
+import cz.dhl.ftp.FtpFile;
+import cz.dhl.io.CoFile;
 
 /**
  *
@@ -28,15 +28,15 @@ import org.apache.commons.net.ftp.FTPFile;
  */
 public class RemoteFileCheckerWorker extends LucelWorker {
 
-	private ArrayList<FTPFile> remoteFiles;
-	private FTPClient ftpClient;
+	private ArrayList<CoFile> remoteFiles;
+	private Ftp ftpClient;
 	private String altisFolder;
-	private HashMap<String, Integer> filesToDownload;
+	private HashMap<String, CoFile> filesToDownload;
 	private ArrayList<String> foldersToCreate;
 	private File altisRootObject;
 	private Hashtable<String, File> localFiles;
 
-	public RemoteFileCheckerWorker(FTPClient ftp, String altisFold) {
+	public RemoteFileCheckerWorker(Ftp ftp, String altisFold) {
 		this.ftpClient = ftp;
 		this.altisFolder = altisFold;
 
@@ -44,18 +44,18 @@ public class RemoteFileCheckerWorker extends LucelWorker {
 		this.altisRootObject = new File(this.altisFolder);
 	}
 
-	public RemoteFileCheckerWorker(FTPClient ftpClient, String armaRoot, Hashtable<String, File> altisFiles) {
+	public RemoteFileCheckerWorker(Ftp ftpClient, String armaRoot, Hashtable<String, File> altisFiles) {
 		this(ftpClient, armaRoot);
 		this.localFiles = altisFiles;
 	}
 
 	public void process() {
 		try {
-			this.remoteFiles = new ArrayList<FTPFile>();
-			this.setFilesToDownload(new HashMap<String, Integer>());
+			this.remoteFiles = new ArrayList<CoFile>();
+			this.setFilesToDownload(new HashMap<String, CoFile>());
 			this.setFoldersToCreate(new ArrayList<String>());
 
-			listRemoteFiles(ftpClient);
+			listRemoteFiles(new FtpFile("/",ftpClient));
 		} catch (IOException ex) {
 			Logger.getLogger(RemoteFileCheckerWorker.class.getName()).log(Level.SEVERE, null, ex);
 		}
@@ -75,21 +75,22 @@ public class RemoteFileCheckerWorker extends LucelWorker {
 	/**
 	 * List the main node of a ftp tree
 	 * 
-	 * @param ftpClient
+	 * @param root
 	 * @return
 	 * @throws IOException
 	 */
-	private List<FTPFile> listRemoteFiles(FTPClient ftpClient) throws IOException {
-		List<FTPFile> resultList = new ArrayList<FTPFile>();
-
+	private List<CoFile> listRemoteFiles(FtpFile root) throws IOException {
+		List<CoFile> resultList = new ArrayList<CoFile>();
+		
+		Logger.getLogger(this.getClass().getSimpleName()).warning("listRemoteFiles");
+		
 		// get all the files from a directory
-		FTPFile[] fList = ftpClient.listFiles();
+		CoFile[] fList = root.listCoFiles();//listFiles();
 		resultList.addAll(Arrays.asList(fList));
-		for (FTPFile file : fList) {
-			System.out.println("TARGET="+Lucel_Updater.config.getProperty("altisfr.foldername"));
-			
+		for (CoFile file : fList) {
+			Logger.getLogger(this.getClass().getSimpleName()).warning("AA="+file.getAbsolutePath());
 			if (file.isFile()) {
-				String S = new SimpleDateFormat("dd/MM/yyyy hh:ss").format(file.getTimestamp().getTime());
+				String S = new SimpleDateFormat("dd/MM/yyyy hh:ss").format(file.lastModified());//getTimestamp().getTime());
 				MainFrame.getInstance().addDebugZoneRow("Norm file: " + "/" + file.getName());// +
 																								// " - "+S);
 				this.getRemoteFiles().add(file);
@@ -104,7 +105,7 @@ public class RemoteFileCheckerWorker extends LucelWorker {
 					File currentLocal = this.localFiles.get(file.getName());// fileObjectName);
 
 					MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : NOK :( ! We'll add it to the downloads pool.");
-					this.getFilesToDownload().put(ftpClient.printWorkingDirectory() + "/" + file.getName(), (int) file.getSize());
+					this.getFilesToDownload().put(root.getAbsolutePath() + file.getName(), file);//getSize());
 				}
 
 				// do not take "." and ".." folders for parsing to avoid
@@ -113,7 +114,7 @@ public class RemoteFileCheckerWorker extends LucelWorker {
 					!".".equals(file.getName()) && !"..".equals(file.getName())) {
 				System.out.println("DIR="+file.getName());
 				
-				String S = new SimpleDateFormat("dd/MM/yyyy hh:ss").format(file.getTimestamp().getTime());
+				String S = new SimpleDateFormat("dd/MM/yyyy hh:ss").format(file.lastModified());//getTimestamp().getTime());
 				MainFrame.getInstance().addDebugZoneRow("Directory: " + file.getName());// +
 																						// " - "+S);
 
@@ -127,13 +128,13 @@ public class RemoteFileCheckerWorker extends LucelWorker {
 					File currentLocal = this.localFiles.get(file.getName());// fileObjectName);
 
 					MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : NOK :( ! We'll add it to the creation pool.");
-					this.getFoldersToCreate().add(ftpClient.printWorkingDirectory() + "/" + file.getName());
+					this.getFoldersToCreate().add(root.getAbsolutePath() + file.getName());
 				}
 
 				MainFrame.getInstance().repaint();
 				// MainFrame.getInstance().pack();
 				// parse the children nodes
-				listNodeFiles(ftpClient, file.getName());
+				listNodeFiles(file, file.getAbsolutePath());
 
 				this.setProgress(100);
 			}
@@ -141,87 +142,103 @@ public class RemoteFileCheckerWorker extends LucelWorker {
 		return resultList;
 	}
 
-	private List<FTPFile> listNodeFiles(FTPClient ftpClient, String parent) throws IOException {
-		List<FTPFile> resultList = new ArrayList<FTPFile>();
+	private List<CoFile> listNodeFiles(CoFile file2, String parent) throws IOException {
+		List<CoFile> resultList = new ArrayList<CoFile>();
 		// get all the files from a directory
-		// MainFrame.getInstance().addDebugZoneRow("    -> digging into "+parent);
-		ftpClient.changeWorkingDirectory(parent);
+		
+		Logger.getLogger(this.getClass().getSimpleName()).warning("Diging into " + file2.getAbsolutePath()+" /// " + parent);
+		
+		ftpClient.cd(parent);//ftpFile.changeWorkingDirectory(parent);
+		Logger.getLogger(this.getClass().getSimpleName()).warning(ftpClient.pwd());
+		
+		CoFile p = new FtpFile(parent, ftpClient);
 
-		FTPFile[] files = ftpClient.listFiles();
+		CoFile[] files = file2.listCoFiles();//listFiles();
 		resultList.addAll(Arrays.asList(files));
 
-		for (FTPFile file : files) {
+		for (CoFile file : files) {
 			if (file.isFile()) {
-				String S = new SimpleDateFormat("dd/MM/yyyy hh:ss").format(file.getTimestamp().getTime());
+				String S = new SimpleDateFormat("dd/MM/yyyy hh:ss").format(file.lastModified());//getTimestamp().getTime());
 				// MainFrame.getInstance().addDebugZoneRow("Norm file: "+parent+"/"+file.getName());//+
 				// " - "+S + file.getRawListing());
 				this.getRemoteFiles().add(file);
 
-				String fileObjectName = this.altisRootObject.getAbsolutePath() + ftpClient.printWorkingDirectory() + "/" + file.getName();
+				String fileObjectName = this.altisRootObject.getAbsolutePath() + file2.getAbsolutePath() + "/" + file.getName();
 				fileObjectName = fileObjectName.replace("\\", "/");
 				// MainFrame.getInstance().addDebugZoneRow("The local filename should be "
 				// + fileObjectName);
 				File fileObject = new File(fileObjectName);
 				if (fileObject.exists()) {
-					File currentLocal = this.localFiles.get(file.getName());// fileObjectName);
+					File currentLocal = this.localFiles.get(file.getName());
 
 					// compare the local and remote file dates to know if we
 					// must re-download the file
-					Long l = currentLocal.lastModified() / 1000;
-					Long lo = file.getTimestamp().getTimeInMillis() / 1000;
-
+					Long l = currentLocal.lastModified() / 10000;
+					Long lo = file.lastModified() / 10000;
+					
+					Logger.getLogger(this.getClass().getSimpleName()).warning("testing " +fileObjectName);
+							
+					Long remoteSize = file.length();
+					Long localSize = currentLocal.length();
+					MainFrame.getInstance().addDebugZoneRow("LocalSize:"+localSize.longValue()+" remoteSize:"+remoteSize.longValue());
+					Logger.getLogger(this.getClass().getSimpleName()).warning("localdate = " + l + " remotedate=" + lo);
 					if (l < lo) {// local file is not up to date !
 						MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : NOK (file is not up-to-date ! We'll add it to the downloads pool.");
-						this.getFilesToDownload().put(ftpClient.printWorkingDirectory() + "/" + file.getName(), (int) file.getSize());
-					} else {
+						this.getFilesToDownload().put(file2.getAbsolutePath() + "/" + file.getName(), file);
+					} else if(l == lo) {
 						// local file up to date
-						MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : OK !");
+						MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : File date is the same as remote, check the size now:");
+						Logger.getLogger(this.getClass().getSimpleName()).warning(fileObjectName+" remoteSize"+remoteSize+" remoteSizeLV="+remoteSize.longValue()+" locSize="+localSize+" locSizeLV="+localSize.longValue());
+						if(remoteSize.longValue() != localSize.longValue()){
+							MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : File date is the same as remote, but the size is different, we'll add it to the downloads pool.");
+							this.getFilesToDownload().put(file2.getAbsolutePath() + "/" + file.getName(), file);
+						}
+						else
+						{
+							MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : OK !");
+						}
 					}
+//					else
+//					{
+//						//localTime > remoteTime ?
+//						//just in case, download
+//						MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : This local file date seems strange. Just in case, download the file.");
+//						this.getFilesToDownload().put(file2.getAbsolutePath() + "/" + file.getName(), file);
+//					}
 				} else {
 
 					MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : NOK (file doesn't exist :( ! We'll add it to the downloads pool.");
-					this.getFilesToDownload().put(ftpClient.printWorkingDirectory() + "/" + file.getName(), (int) file.getSize());
+					this.getFilesToDownload().put(file2.getAbsolutePath() + "/" + file.getName(), file);
 				}
 
 			} else if (file.isDirectory() && !".".equals(file.getName()) && !"..".equals(file.getName())) {
-				String S = new SimpleDateFormat("dd/MM/yyyy hh:ss").format(file.getTimestamp().getTime());
+				String S = new SimpleDateFormat("dd/MM/yyyy hh:ss").format(file.lastModified());
 				this.getRemoteFiles().add(file);
 
 				// check if the local file exists at the same path
-				String fileObjectName = this.altisRootObject.getAbsolutePath() + ftpClient.printWorkingDirectory() + "/" + file.getName();
+				String fileObjectName = this.altisRootObject.getAbsolutePath() + file2.getAbsolutePath() + "/" + file.getName();
 				fileObjectName = fileObjectName.replace("\\", "/");
-				// MainFrame.getInstance().addDebugZoneRow("2/ The local foldername should be "
-				// + fileObjectName);
 				File fileObject = new File(fileObjectName);
 				if (fileObject.exists()) {
 					MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : OK !");
 				} else {
-					/*
-					 * File currentLocal =
-					 * this.localFiles.get(file.getName());//fileObjectName);
-					 * MainFrame
-					 * .getInstance().addDebugZoneRow("CURRENT LOCAL IS " +
-					 * currentLocal.getName());
-					 * MainFrame.getInstance().addDebugZoneRow
-					 * ("CURRENT REMOTE IS " + fileObjectName);
-					 */
-
+				
 					MainFrame.getInstance().addDebugZoneRow("Testing " + fileObjectName + " : NOK :( ! We'll add it to the creation pool.");
-					this.getFoldersToCreate().add(ftpClient.printWorkingDirectory() + "/" + file.getName());
+					this.getFoldersToCreate().add(file2.getAbsolutePath() + "/" + file.getName());
 				}
 
 				// continue the children node parsing
-				listNodeFiles(ftpClient, file.getName());
+				listNodeFiles(file, file.getName());
 			}
 		}
-		ftpClient.changeWorkingDirectory("../");
+		ftpClient.cd("../");//.changeWorkingDirectory("../");
 		return resultList;
 	}
 
 	/**
 	 * @return the remoteFiles
 	 */
-	public ArrayList<FTPFile> getRemoteFiles() {
+	public ArrayList<CoFile> getRemoteFiles() {
 		return remoteFiles;
 	}
 
@@ -229,14 +246,14 @@ public class RemoteFileCheckerWorker extends LucelWorker {
 	 * @param remoteFiles
 	 *            the remoteFiles to set
 	 */
-	public void setRemoteFiles(ArrayList<FTPFile> remoteFiles) {
+	public void setRemoteFiles(ArrayList<CoFile> remoteFiles) {
 		this.remoteFiles = remoteFiles;
 	}
 
 	/**
 	 * @return the ftpClient
 	 */
-	public FTPClient getFtpClient() {
+	public Ftp getFtpClient() {
 		return ftpClient;
 	}
 
@@ -244,14 +261,14 @@ public class RemoteFileCheckerWorker extends LucelWorker {
 	 * @param ftpClient
 	 *            the ftpClient to set
 	 */
-	public void setFtpClient(FTPClient ftpClient) {
+	public void setFtpClient(Ftp ftpClient) {
 		this.ftpClient = ftpClient;
 	}
 
 	/**
 	 * @return the filesToDownload
 	 */
-	public HashMap<String, Integer> getFilesToDownload() {
+	public HashMap<String, CoFile> getFilesToDownload() {
 		return filesToDownload;
 	}
 
@@ -259,7 +276,7 @@ public class RemoteFileCheckerWorker extends LucelWorker {
 	 * @param filesToDownload
 	 *            the filesToDownload to set
 	 */
-	public void setFilesToDownload(HashMap<String, Integer> filesToDownload) {
+	public void setFilesToDownload(HashMap<String, CoFile> filesToDownload) {
 		this.filesToDownload = filesToDownload;
 	}
 

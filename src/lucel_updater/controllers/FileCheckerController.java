@@ -7,6 +7,7 @@
 package lucel_updater.controllers;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -19,6 +20,9 @@ import java.util.logging.Logger;
 
 import javax.swing.JProgressBar;
 
+import org.apache.commons.net.ftp.FTP;
+
+import cz.dhl.io.CoFile;
 import lucel_updater.Lucel_Updater;
 import lucel_updater.models.FTPClientManager;
 import lucel_updater.models.FTPDownloadManager;
@@ -29,7 +33,7 @@ public class FileCheckerController {
 
 	private String armaRoot;
 	private Hashtable<String, File> altisFiles;
-	private HashMap<String, Integer> toDownload;
+	private HashMap<String, CoFile> toDownload;
 	private ArrayList<String> toCreate;
 
 	private FTPClientManager ftpManager;
@@ -100,6 +104,14 @@ public class FileCheckerController {
 			// connection & authentication OK
 			MainFrame.getInstance().addDebugZoneRow("Connection established...");
 			MainFrame.getInstance().addDebugZoneRow("\r\nRemote files: ");
+			
+			//set the ftp connection to binary mode
+			/*try {
+				this.ftpManager.getFtpClient().setFileType(FTP.BINARY_FILE_TYPE);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}*/
 
 			final RemoteFileCheckerWorker remoteLister = new RemoteFileCheckerWorker(ftpManager.getFtpClient(), this.armaRoot, this.altisFiles);
 			final FTPDownloadManager downloadManager = new FTPDownloadManager(this.armaRoot);
@@ -137,7 +149,9 @@ public class FileCheckerController {
 
 					for (String key : toDownload.keySet()) {
 						String filename = key;
-						int size = toDownload.get(key);
+						CoFile toDownloadFile = toDownload.get(key);
+						
+						long size = toDownloadFile.length();
 						Double displaySizeK = (size / 1024.00);
 						Double displaySizeM = (size / 1024.00 / 1024.00);
 						Double displaySize;
@@ -150,8 +164,9 @@ public class FileCheckerController {
 							unity = "Mo";
 						}
 						MainFrame.getInstance().addDebugZoneRow("Downloading " + filename + " (" + String.format("%.2f", displaySize) + " " + unity + ") ...");
-
-						if (downloadManager.addDownloadToPool(filename, filename)) {
+						MainFrame.getInstance().getDownloadFrame().setVisible(true);
+						
+						if(downloadManager.addDownloadToPool(toDownloadFile, size)){
 							MainFrame.getInstance().addDebugZoneRow("Download OK.");
 							JProgressBar bar = MainFrame.getInstance().getjProgressBar1();
 							double value = bar.getValue() + step;
@@ -159,19 +174,20 @@ public class FileCheckerController {
 								value = bar.getMaximum();
 							}
 							bar.setValue((int) value);
-						} else {
-							MainFrame.getInstance().addDebugZoneRow("Download failed... Retrying.");
-							if (downloadManager.addDownloadToPool(filename, filename)) {
-								MainFrame.getInstance().addDebugZoneRow("Download OK.");
-								JProgressBar bar = MainFrame.getInstance().getjProgressBar1();
-								double value = bar.getValue() + step;
-								if (value > bar.getMaximum()) {
-									value = bar.getMaximum();
-								}
-								bar.setValue((int) value);
-							} else
-								MainFrame.getInstance().addDebugZoneRow("Download failed...");
 						}
+//						} else {
+//							MainFrame.getInstance().addDebugZoneRow("Download failed... Retrying.");
+//							if (downloadManager.addDownloadToPool(toDownloadFile, size)) {
+//								MainFrame.getInstance().addDebugZoneRow("Download OK.");
+//								JProgressBar bar = MainFrame.getInstance().getjProgressBar1();
+//								double value = bar.getValue() + step;
+//								if (value > bar.getMaximum()) {
+//									value = bar.getMaximum();
+//								}
+//								bar.setValue((int) value);
+//							} else
+//								MainFrame.getInstance().addDebugZoneRow("Download failed...");
+//						}
 					}
 
 				}
@@ -187,6 +203,7 @@ public class FileCheckerController {
 			MainFrame.getInstance().addDebugZoneRow("Authentication failed...");
 		}
 	}
+
 
 	private boolean checkFolderExists(Path folderPath) {
 		return Files.exists(folderPath);

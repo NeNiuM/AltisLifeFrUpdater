@@ -5,7 +5,18 @@
  */
 package lucel_updater.gui.frames;
 
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.logging.Logger;
+
+import javax.swing.JProgressBar;
 import javax.swing.table.DefaultTableModel;
+
+import lucel_updater.gui.misc.LucelProgressRenderer;
+import lucel_updater.gui.misc.LucelTableRow;
+import lucel_updater.models.LucelTableModel;
 
 /**
  *
@@ -34,30 +45,17 @@ public class DownloadFrame extends javax.swing.JFrame {
 
         setName("downloadFrame"); // NOI18N
 
-        jTable1.setModel(new javax.swing.table.DefaultTableModel(
-            new Object [][] {
-
-            },
-            new String [] {
+        jTable1.setModel(new LucelTableModel(
+        	new String [] {
                 "Fichier local", "Fichier distant", "Taille", "Avancement"
             }
-        ) {
-            Class[] types = new Class [] {
-                java.lang.String.class, java.lang.String.class, java.lang.String.class, java.lang.String.class
-            };
-            boolean[] canEdit = new boolean [] {
-                false, false, false, false
-            };
-
-            public Class getColumnClass(int columnIndex) {
-                return types [columnIndex];
-            }
-
-            public boolean isCellEditable(int rowIndex, int columnIndex) {
-                return canEdit [columnIndex];
-            }
-        });
-        jTable1.setColumnSelectionAllowed(true);
+        ));
+        
+        jTable1.setColumnSelectionAllowed(false);
+        LucelProgressRenderer rend = new LucelProgressRenderer();
+        rend.prog.setStringPainted(true);
+        rend.prog.setString("0 %");
+        jTable1.getColumnModel().getColumn(3).setCellRenderer(rend);
         jTable1.setFillsViewportHeight(true);
         jTable1.getTableHeader().setReorderingAllowed(false);
         jScrollPane1.setViewportView(jTable1);
@@ -73,7 +71,7 @@ public class DownloadFrame extends javax.swing.JFrame {
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 395, Short.MAX_VALUE)
         );
-
+       
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
@@ -107,18 +105,60 @@ public class DownloadFrame extends javax.swing.JFrame {
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
-                new DownloadFrame().setVisible(true);
+               DownloadFrame d = new DownloadFrame();
+               d.setVisible(true);
+               d.setResizable(true);
+               d.addTableRow("TO FILE", "FROM FILE", (long) 11111.11);//, progress);
+//               d.setDownloadProgress(0, 234, 518);
+               d.jTable1.getModel().setValueAt((long)75, 0, 3);
             }
         });
     }
     
-    public void addTableRow(String from, String to, String size, String progress ){
-        DefaultTableModel model = (DefaultTableModel) this.jTable1.getModel();
-        model.addRow(new Object[]{from, to, size, progress});
+    public int addTableRow(String to, String from, long size){
+        LucelTableModel model = (LucelTableModel) this.jTable1.getModel();
+        
+        Double displaySizeK = (size / 1024.00);
+		Double displaySizeM = (size / 1024.00 / 1024.00);
+		Double displaySize;
+		String unity;
+		if (size < 9999) {
+			displaySize = displaySizeK;
+			unity = "Ko";
+		} else {
+			displaySize = displaySizeM;
+			unity = "Mo";
+		}
+		
+//		ArrayList<String> row = new ArrayList<String>();
+//		row.addAll(Arrays.asList(to, from, String.format("%.2f", displaySize) + " " + unity));//, progress));
+		LucelTableRow row = new LucelTableRow(from, to, String.format("%.2f", displaySize) + " " + unity);
+        return model.addRow(row);
     }
 
+    public javax.swing.JTable getjTable1() {
+		return jTable1;
+	}
+
+	public void setjTable1(javax.swing.JTable jTable1) {
+		this.jTable1 = jTable1;
+	}
+
+	public void setSpeed(long speed){
+    	this.setTitle(speed + " KB/s");
+    }
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JTable jTable1;
     // End of variables declaration//GEN-END:variables
+    
+	
+	public void setDownloadProgress(int rowNumber, long done, long total) {
+		LucelTableModel model = (LucelTableModel) this.jTable1.getModel();
+		
+		long percent = (100 * done) / total; 
+		
+		model.setValueAt(percent, rowNumber, 3);
+    	model.fireTableCellUpdated(rowNumber, 3);
+	}
 }

@@ -5,6 +5,7 @@
  */
 package lucel_updater.controllers;
 
+import java.awt.Dialog.ModalityType;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
@@ -55,11 +56,10 @@ public class MainFrame extends javax.swing.JFrame {
 
 			// also add the related frames here (cause initComponents is read
 			// only and handled by Netbeans)
-			/*
-			 * this.downloadFrame = new DownloadFrame();
-			 * this.downloadFrame.setVisible(false);
-			 */
-
+			this.downloadFrame = new DownloadFrame();
+			this.downloadFrame.setName("Downloads");
+			this.downloadFrame.setVisible(false);
+		
 			String configInfos = "Detected FTP Url: " + Lucel_Updater.getConfigValue("altisfr.ftp.host") + ":" + Lucel_Updater.getConfigValue("altisfr.ftp.port") + "\r\n";
 			configInfos += "Checked game folder: " + Lucel_Updater.getConfigValue("altisfr.foldername") + "\r\n";
 			// this.infoPane.setText(configInfos);
@@ -193,6 +193,7 @@ public class MainFrame extends javax.swing.JFrame {
 	}
 
 	private JLabel altisRoot;
+	protected boolean setUpdateRunning = false;
 
 	/**
 	 * This method is called from within the constructor to initialize the form.
@@ -226,7 +227,7 @@ public class MainFrame extends javax.swing.JFrame {
 		jMenuItem5 = new javax.swing.JMenuItem();
 
 		setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-		setTitle("AltisLifeFR Updater v0.3");
+		setTitle("AltisLifeFR Updater v0.4");
 		setBackground(new java.awt.Color(255, 255, 255));
 		setResizable(false);
 		getContentPane().setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
@@ -298,7 +299,7 @@ public class MainFrame extends javax.swing.JFrame {
 		jMenu4.setText("Affichage");
 
 		jMenuItem6.setText("Afficher les téléchargements");
-		jMenuItem6.setEnabled(false);
+		jMenuItem6.setEnabled(true);
 		jMenuItem6.addActionListener(new java.awt.event.ActionListener() {
 			public void actionPerformed(java.awt.event.ActionEvent evt) {
 				jMenuItem6ActionPerformed(evt);
@@ -495,8 +496,11 @@ public class MainFrame extends javax.swing.JFrame {
 	}// GEN-LAST:event_jButton2ActionPerformed
 
 	private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {// GEN-FIRST:event_jButton3ActionPerformed
-		ScanBackgroundTask s = new ScanBackgroundTask();
-		s.execute();
+		if(!this.setUpdateRunning){
+			ScanBackgroundTask s = new ScanBackgroundTask();
+			s.execute();
+		}
+		this.setUpdateRunning  = true;
 	}// GEN-LAST:event_jButton3ActionPerformed
 
 	class ScanBackgroundTask extends SwingWorker<String, Object> {
@@ -511,6 +515,7 @@ public class MainFrame extends javax.swing.JFrame {
 		@Override
 		protected void done() {
 			MainFrame.getInstance().addDebugZoneRow("Done.");
+			MainFrame.getInstance().setUpdateRunning = false;
 			jProgressBar1.setValue(100);
 			MainFrame.getInstance().getjButton2().setEnabled(true);
 		}
